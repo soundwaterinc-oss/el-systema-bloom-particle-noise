@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Particle Noise Lab</title>
+    <link rel="stylesheet" href="./styles.css?v=20260517-5" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero panel">
+        <div>
+          <p class="eyebrow">Experimental Audio Instrument</p>
+          <h1>Particle Noise Lab</h1>
+          <p class="lede">Short dust, clicks, and random particles shaped by Web Audio.</p>
+          <p class="lede">Build tri-engine-02</p>
+        </div>
+        <div class="hero-meta">
+          <span class="chip">plain HTML/CSS/JS</span>
+          <span class="chip">Web Audio API</span>
+          <span class="chip">Canvas API</span>
+        </div>
+      </section>
+
+      <section class="layout">
+        <aside class="panel controls">
+          <div class="transport">
+            <button id="startAudioButton" class="primary">Start Audio</button>
+            <button id="startAllButton">Start All</button>
+            <button id="stopButton">Stop</button>
+            <button id="stopAllButton">Stop All</button>
+          </div>
+
+          <div class="section-title">
+            <span>Engine</span>
+            <small>Particle / Metallic / Physical can run together.</small>
+          </div>
+
+          <div class="engine-tabs" id="engineTabs" role="tablist" aria-label="Sound engine"></div>
+
+          <div class="section-title">
+            <span>Engine state</span>
+            <small id="activeEngineLabel">Particle Noise Engine</small>
+          </div>
+
+          <div class="engine-volume-grid">
+            <label class="slider compact">
+              <span>Particle volume</span>
+              <input id="particleVolume" type="range" min="0" max="1.6" step="0.01" value="0.78" />
+              <strong id="particleVolumeValue">0.78</strong>
+            </label>
+            <label class="slider compact">
+              <span>Metallic volume</span>
+              <input id="metallicVolume" type="range" min="0" max="1.6" step="0.01" value="0.72" />
+              <strong id="metallicVolumeValue">0.72</strong>
+            </label>
+            <label class="slider compact">
+              <span>Physical volume</span>
+              <input id="physicalVolume" type="range" min="0" max="1.6" step="0.01" value="0.68" />
+              <strong id="physicalVolumeValue">0.68</strong>
+            </label>
+          </div>
+
+          <div class="slider-grid">
+            <label class="slider">
+              <span>rate</span>
+              <input id="rate" type="range" min="0" max="24" step="0.1" value="7" />
+              <strong id="rateValue">7.0</strong>
+            </label>
+            <label class="slider">
+              <span>size</span>
+              <input id="size" type="range" min="0.01" max="0.35" step="0.01" value="0.08" />
+              <strong id="sizeValue">0.08</strong>
+            </label>
+            <label class="slider">
+              <span>density</span>
+              <input id="density" type="range" min="0" max="1.5" step="0.01" value="0.55" />
+              <strong id="densityValue">0.55</strong>
+            </label>
+            <label class="slider">
+              <span>brightness</span>
+              <input id="brightness" type="range" min="0" max="1" step="0.01" value="0.65" />
+              <strong id="brightnessValue">0.65</strong>
+            </label>
+            <label class="slider">
+              <span>scatter</span>
+              <input id="scatter" type="range" min="0" max="1" step="0.01" value="0.35" />
+              <strong id="scatterValue">0.35</strong>
+            </label>
+            <label class="slider">
+              <span>randomness</span>
+              <input id="randomness" type="range" min="0" max="1" step="0.01" value="0.45" />
+              <strong id="randomnessValue">0.45</strong>
+            </label>
+            <label class="slider">
+              <span>level</span>
+              <input id="level" type="range" min="0" max="1.2" step="0.01" value="0.72" />
+              <strong id="levelValue">0.72</strong>
+            </label>
+            <label class="slider">
+              <span>bandwidth</span>
+              <input id="bandwidth" type="range" min="0.05" max="1.5" step="0.01" value="0.42" />
+              <strong id="bandwidthValue">0.42</strong>
+            </label>
+            <label class="slider">
+              <span>delay</span>
+              <input id="delay" type="range" min="0" max="1" step="0.01" value="0.28" />
+              <strong id="delayValue">0.28</strong>
+            </label>
+            <label class="slider">
+              <span>reverb</span>
+              <input id="reverb" type="range" min="0" max="1" step="0.01" value="0.2" />
+              <strong id="reverbValue">0.20</strong>
+            </label>
+            <label class="slider">
+              <span>masterGain</span>
+              <input id="masterGain" type="range" min="0" max="1.4" step="0.01" value="0.72" />
+              <strong id="masterGainValue">0.72</strong>
+            </label>
+          </div>
+
+          <section class="future-block">
+            <div class="section-title">
+              <span>Metallic</span>
+              <small>Can be run at the same time as the other engines.</small>
+            </div>
+            <div class="future-grid">
+              <div class="future-slot"></div>
+              <div class="future-slot"></div>
+              <div class="future-slot"></div>
+            </div>
+          </section>
+
+          <section class="future-block">
+            <div class="section-title">
+              <span>Physical</span>
+              <small>Can be run at the same time as the other engines.</small>
+            </div>
+            <div class="future-grid">
+              <div class="future-slot"></div>
+              <div class="future-slot"></div>
+              <div class="future-slot"></div>
+            </div>
+          </section>
+        </aside>
+
+        <section class="panel preview">
+          <div class="preview-header">
+            <div>
+              <span class="section-title-inline">Canvas preview</span>
+              <p>Particle cloud motion is rendered live from the current engine state.</p>
+            </div>
+            <div class="status-grid">
+              <div>
+                <span>Status</span>
+                <strong id="statusValue">Idle</strong>
+              </div>
+              <div>
+                <span>Particles</span>
+                <strong id="particleCountValue">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <canvas id="particleCanvas" width="960" height="720"></canvas>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="./src/main.js?v=20260517-8"></script>
+  </body>
+</html>
