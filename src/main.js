@@ -6,6 +6,11 @@ import { createPhysicalEngine } from "./audio/engines/physical.js";
 import { bindUI } from "./ui/bindings.js";
 import { createParticleField } from "./visual/particle-field.js";
 
+// 葉：場と繋ぐ。fallback で単体動作も維持
+if (typeof window.registerElSystemaInstrument !== "function") {
+  window.registerElSystemaInstrument = function(){};
+}
+
 const elements = {
   startAudioButton: document.querySelector("#startAudioButton"),
   startAllButton: document.querySelector("#startAllButton"),
@@ -89,6 +94,9 @@ function renderEngineTabs() {
   elements.startAllButton.textContent = "Start All";
 }
 
+// 葉：場と繋ぐための登録フラグ
+let _elSystemaRegistered = false;
+
 async function startAudio() {
   if (!appState.audioContext) {
     appState.audioContext = ensureAudioContext();
@@ -111,6 +119,84 @@ async function startAudio() {
   await resumeAudioContext();
   setStatus("Audio Ready");
   syncMasterGain();
+
+  // 葉：場と繋ぐ（audioContext と masterBus が確定した後で呼ぶ）
+  if (!_elSystemaRegistered) {
+    _elSystemaRegistered = true;
+    // masterGraph.masterGain ノードを outputNode に渡す
+    const masterBus = appState.masterGraph.masterGain || appState.masterGraph.output || appState.masterGraph;
+
+    registerElSystemaInstrument({
+      id: "particle-noise",
+      audioContext: appState.audioContext,
+      outputNode: masterBus,
+
+      play: () => {
+        // 既存「Start All」相当 ─ 三エンジン全て play
+        Object.values(appState.engines).forEach(e => e.start && e.start());
+      },
+      stop: () => {
+        Object.values(appState.engines).forEach(e => e.stop && e.stop());
+      },
+
+      setParam: (name, value) => {
+        // name は engine 名.param か、全 engine 共通の param
+        //  例: "particle.density"、"metallic.brightness"、"masterGain"
+        const [engineName, param] = name.includes(".") ? name.split(".") : [null, name];
+
+        if (engineName && appState.engines[engineName]) {
+          appState.engines[engineName].setParams({ [param]: value });
+          return;
+        }
+        // engineName が無い → 全 engine に同じ param を放る
+        Object.values(appState.engines).forEach(e => {
+          if (e.setParams) {
+            try { e.setParams({ [param]: value }); } catch (_) {}
+          }
+        });
+      },
+
+      ramp: (name, from, to, durationSec) => {
+        const dur = Math.max(0.001, durationSec);
+        const startMs = performance.now();
+        const tick = () => {
+          const elapsedSec = (performance.now() - startMs) / 1000;
+          const k = Math.min(1, elapsedSec / dur);
+          const v = from + (to - from) * k;
+          // setParam 経由で滑らかに反映
+          try { registerElSystemaInstrument.__last?.setParam?.(name, v); } catch (_) {}
+          if (k < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      },
+
+      loadPreset: (preset) => {
+        if (!preset || typeof preset !== "object") return;
+        for (const [k, v] of Object.entries(preset)) {
+          try {
+            if (typeof v === "object" && v !== null) {
+              // ネストされたパラメータ
+              for (const [k2, v2] of Object.entries(v)) {
+                const nested = `${k}.${k2}`;
+                try { registerElSystemaInstrument.__last?.setParam?.(nested, v2); } catch (_) {}
+              }
+            } else {
+              registerElSystemaInstrument.__last?.setParam?.(k, v);
+            }
+          } catch (_) {}
+        }
+      },
+
+      snapshot: () => {
+        // 主要パラメータ ─ engine ごとに collect
+        const snap = {};
+        for (const [engineName, e] of Object.entries(appState.engines)) {
+          if (e.getParams) snap[engineName] = e.getParams();
+        }
+        return snap;
+      },
+    });
+  }
 }
 
 async function startParticle() {
