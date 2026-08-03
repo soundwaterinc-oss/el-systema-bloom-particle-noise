@@ -6,6 +6,8 @@ import { createPhysicalEngine } from "./audio/engines/physical.js";
 import { bindUI } from "./ui/bindings.js";
 import { createParticleField } from "./visual/particle-field.js";
 
+const FIELD_ON = /[?&#]field/.test(location.href);
+
 // 葉：場と繋ぐ。fallback で単体動作も維持
 if (typeof window.registerElSystemaInstrument !== "function") {
   window.registerElSystemaInstrument = function(){};
@@ -97,6 +99,52 @@ function renderEngineTabs() {
 // 葉：場と繋ぐための登録フラグ
 let _elSystemaRegistered = false;
 
+function setFieldControl(name, value) {
+  const el = elements[name];
+  if (!el || el.type !== "range") return false;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return false;
+  el.value = String(Math.min(Number(el.max), Math.max(Number(el.min), numeric)));
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+}
+
+function elsysMacro(name, value) {
+  const v = Math.max(0, Math.min(1, Number(value) || 0));
+  if (name === "macro.a") {
+    setFieldControl("rate", 24 * v);
+    setFieldControl("density", 1.5 * v);
+    setFieldControl("level", 1.2 * v);
+  } else if (name === "macro.b") {
+    setFieldControl("brightness", v);
+    setFieldControl("scatter", v);
+    setFieldControl("randomness", v);
+    setFieldControl("bandwidth", 0.05 + 1.45 * v);
+  } else if (name === "macro.c") {
+    setFieldControl("delay", v);
+    setFieldControl("reverb", v);
+    setFieldControl("size", 0.01 + 0.34 * v);
+  } else if (name === "volume") {
+    setFieldControl("masterGain", v * v);
+  }
+}
+
+function setRelayParam(name, value) {
+  if (/^(macro\.[abc]|volume)$/.test(name)) {
+    elsysMacro(name, value);
+    return;
+  }
+  if (setFieldControl(name, value)) return;
+  const [engineName, param] = name.includes(".") ? name.split(".") : [null, name];
+  if (engineName && appState.engines[engineName]) {
+    appState.engines[engineName].setParams?.({ [param]: value });
+    return;
+  }
+  Object.values(appState.engines).forEach((engine) => {
+    try { engine.setParams?.({ [param]: value }); } catch (_) {}
+  });
+}
+
 async function startAudio() {
   if (!appState.audioContext) {
     appState.audioContext = ensureAudioContext();
@@ -121,7 +169,7 @@ async function startAudio() {
   syncMasterGain();
 
   // 葉：場と繋ぐ（audioContext と masterBus が確定した後で呼ぶ）
-  if (!_elSystemaRegistered) {
+  if (FIELD_ON && !_elSystemaRegistered) {
     _elSystemaRegistered = true;
     // masterGraph.masterGain ノードを outputNode に渡す
     const masterBus = appState.masterGraph.masterGain || appState.masterGraph.output || appState.masterGraph;
@@ -139,22 +187,7 @@ async function startAudio() {
         Object.values(appState.engines).forEach(e => e.stop && e.stop());
       },
 
-      setParam: (name, value) => {
-        // name は engine 名.param か、全 engine 共通の param
-        //  例: "particle.density"、"metallic.brightness"、"masterGain"
-        const [engineName, param] = name.includes(".") ? name.split(".") : [null, name];
-
-        if (engineName && appState.engines[engineName]) {
-          appState.engines[engineName].setParams({ [param]: value });
-          return;
-        }
-        // engineName が無い → 全 engine に同じ param を放る
-        Object.values(appState.engines).forEach(e => {
-          if (e.setParams) {
-            try { e.setParams({ [param]: value }); } catch (_) {}
-          }
-        });
-      },
+      setParam: (name, value) => setRelayParam(name, value),
 
       ramp: (name, from, to, durationSec) => {
         const dur = Math.max(0.001, durationSec);
@@ -164,7 +197,7 @@ async function startAudio() {
           const k = Math.min(1, elapsedSec / dur);
           const v = from + (to - from) * k;
           // setParam 経由で滑らかに反映
-          try { registerElSystemaInstrument.__last?.setParam?.(name, v); } catch (_) {}
+          setRelayParam(name, v);
           if (k < 1) requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
@@ -177,11 +210,10 @@ async function startAudio() {
             if (typeof v === "object" && v !== null) {
               // ネストされたパラメータ
               for (const [k2, v2] of Object.entries(v)) {
-                const nested = `${k}.${k2}`;
-                try { registerElSystemaInstrument.__last?.setParam?.(nested, v2); } catch (_) {}
+                setRelayParam(k === "controls" ? k2 : `${k}.${k2}`, v2);
               }
             } else {
-              registerElSystemaInstrument.__last?.setParam?.(k, v);
+              setRelayParam(k, v);
             }
           } catch (_) {}
         }
@@ -189,7 +221,10 @@ async function startAudio() {
 
       snapshot: () => {
         // 主要パラメータ ─ engine ごとに collect
-        const snap = {};
+        const snap = { controls: {} };
+        ["rate","size","density","brightness","scatter","randomness","level","bandwidth","delay","reverb","masterGain"].forEach((name) => {
+          snap.controls[name] = Number(elements[name].value);
+        });
         for (const [engineName, e] of Object.entries(appState.engines)) {
           if (e.getParams) snap[engineName] = e.getParams();
         }
@@ -320,6 +355,7 @@ bindUI({
 
 renderEngineTabs();
 setStatus(getAudioContext() ? "Idle" : "Ready");
+if (FIELD_ON) startAudio().catch(reportError);
 
 function reportError(error) {
   console.error(error);
